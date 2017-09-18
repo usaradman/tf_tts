@@ -20,6 +20,7 @@ tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir2", "Cepstral Mean and Variance 
 tf.app.flags.DEFINE_string("data_dir", "data/scp", "Data directory.")
 tf.app.flags.DEFINE_string("out_dir", "data/tfrecords", "Output data directory.")
 tf.app.flags.DEFINE_boolean("compute_cmvn", False, "compute cmvn of training set")
+tf.app.flags.DEFINE_boolean("apply_cmvn", True, "compute cmvn of training set")
 tf.app.flags.DEFINE_integer("input_dim", 89, "Input dimension.")
 tf.app.flags.DEFINE_integer("output_dim", 51, "Output dimension.")
 
@@ -49,7 +50,7 @@ def convert_to_tfrecords(data_list, records_dir, label_dim, param_dim, apply_cmv
         param = numpy.reshape(param, (row, param_dim))
 
         if (apply_cmvn):
-            label = (label - label_cmvn[0]) / label_cmvn[1]
+            #label = (label - label_cmvn[0]) / label_cmvn[1]
             param = (param - param_cmvn[0]) / param_cmvn[1]
        
         records_filename = "%s/%s.tfrecord" % (records_dir, os.path.basename(data_list[i][0]).split('.')[0])
@@ -69,9 +70,9 @@ def main(_):
     if (not os.path.exists(FLAGS.out_dir)):
         os.mkdir(FLAGS.out_dir)
 
-    convert_to_tfrecords(train_data, FLAGS.out_dir + '/train', FLAGS.input_dim, FLAGS.output_dim, True, label_cmvn, param_cmvn)
-    convert_to_tfrecords(vali_data, FLAGS.out_dir + '/vali', FLAGS.input_dim, FLAGS.output_dim, True, label_cmvn, param_cmvn)
-    convert_to_tfrecords(test_data, FLAGS.out_dir + '/test', FLAGS.input_dim, FLAGS.output_dim, True, label_cmvn, param_cmvn)
+    convert_to_tfrecords(train_data, FLAGS.out_dir + '/train', FLAGS.input_dim, FLAGS.output_dim, FLAGS.apply_cmvn, label_cmvn, param_cmvn)
+    convert_to_tfrecords(vali_data, FLAGS.out_dir + '/vali', FLAGS.input_dim, FLAGS.output_dim, FLAGS.apply_cmvn, label_cmvn, param_cmvn)
+    convert_to_tfrecords(test_data, FLAGS.out_dir + '/test', FLAGS.input_dim, FLAGS.output_dim, FLAGS.apply_cmvn, label_cmvn, param_cmvn)
 
 if __name__ == '__main__':
     tf.app.run()

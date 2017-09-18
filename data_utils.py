@@ -25,11 +25,12 @@ def parse_function(data, input_dim, output_dim):
 
 
 
-def get_batch(data_list, batch_size, input_dim, output_dim, repeat=1):
+def get_batch(data_list, batch_size, input_dim, output_dim, shuffle=True, repeat=1):
         dataset = tf.contrib.data.TFRecordDataset(data_list)
         dataset = dataset.map(lambda filename: parse_function(filename,input_dim, output_dim), num_threads=3)
         dataset = dataset.repeat(repeat)
-        dataset = dataset.shuffle(buffer_size=len(data_list) - 10)
+        if (shuffle):
+            dataset = dataset.shuffle(buffer_size=len(data_list) - 10)
         dataset = dataset.padded_batch(batch_size, padded_shapes=([None, input_dim], [None, output_dim], []))
         iterator = dataset.make_one_shot_iterator()
         return iterator.get_next()

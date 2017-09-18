@@ -19,7 +19,7 @@ import model
 import data_utils
 
 
-tf.app.flags.DEFINE_string("train_dir", "cissy_5000_lstm", "Training directory.")
+tf.app.flags.DEFINE_string("train_dir", "cissy_1900", "Training directory.")
 tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir2", "Cepstral Mean and Variance Normalization directory.")
 tf.app.flags.DEFINE_string("data_dir", "data/tfrecords", "Data directory.")
 tf.app.flags.DEFINE_string("test_dir", "test", "Test output directory.")
@@ -30,12 +30,13 @@ tf.app.flags.DEFINE_integer("output_dim", 51, "Output dimension.")
 tf.app.flags.DEFINE_integer("batch_size", 50, "Batch size.")
 
 tf.app.flags.DEFINE_string("objective_function", "mse", "Objective function.")
-tf.app.flags.DEFINE_integer("min_steps", 5, "Min training iteration.")
+tf.app.flags.DEFINE_integer("min_steps", 10, "Min training iteration.")
 tf.app.flags.DEFINE_integer("max_steps", 100, "Max training iteration.")
 tf.app.flags.DEFINE_integer("steps_ckpt", 1, "iteration num for save checkpoint.")
 tf.app.flags.DEFINE_integer("keep_lr_steps", 3, "Data directory.")
-tf.app.flags.DEFINE_float("learn_rate", 0.0001, "Data directory.")
-tf.app.flags.DEFINE_float("momentum", 0.9, "Momentum. default(0.9)")
+tf.app.flags.DEFINE_float("learn_rate", 0.0001, "Learning rate.")
+tf.app.flags.DEFINE_float("momentum", 0.8, "Momentum for MomentumOptimizer")
+tf.app.flags.DEFINE_float("grad_clip", 8.0, "Gradients clip max_norm value")
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.75, "Learning rate decay factor.")
 tf.app.flags.DEFINE_float("start_decay_impr", 0.001, "Start decay learning rate when rel_impr < start_decay_impr.")
 tf.app.flags.DEFINE_float("end_decay_impr", 0.0001, "Finish training when rel_impr < end_decay_impr.")
@@ -45,15 +46,15 @@ FLAGS = tf.app.flags.FLAGS
 
 NNET_PROTO = [
                 {'type':'DNN',
-                'num_units':128,
+                'num_units':256,
                 'activation':'relu',
                 'dropout':False},
                 {'type':'DNN',
-                'num_units':128,
+                'num_units':256,
                 'activation':'relu',
                 'dropout':False},
                 {'type':'LSTM',
-                'num_units':128,
+                'num_units':256,
                 'activation':'',
                 'dropout':False}
           ]
@@ -69,7 +70,8 @@ def create_model(sess):
                       FLAGS.batch_size,
                       FLAGS.learn_rate,
                       FLAGS.objective_function,
-                      FLAGS.momentum)
+                      FLAGS.momentum,
+                      FLAGS.grad_clip)
     ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
         print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
@@ -87,6 +89,8 @@ def train():
     vali_data = [FLAGS.data_dir + '/vali/' + input_ for input_ in os.listdir(FLAGS.data_dir + '/vali/')]
     test_data = [FLAGS.data_dir + '/test/' + input_ for input_ in os.listdir(FLAGS.data_dir + '/test/')]
 
+    label_cmvn, param_cmvn = data_utils.get_cmvn(FLAGS.cmvn_dir)
+
     if (not os.path.exists(FLAGS.train_dir)):
         os.mkdir(FLAGS.train_dir)
 
@@ -102,7 +106,7 @@ def train():
         print('PRERUN AVG.LOSS %.4f' % pre_vali_loss)
         for step in xrange(FLAGS.max_steps):
             start_time = time.time()
-            train_loss = nnet_model.step(train_data)
+            train_loss = nnet_model.step(train_data, True)
             end_time = time.time()
             step_time = end_time - start_time
             current_step += 1
@@ -125,7 +129,7 @@ def train():
                 cur_test_dir = FLAGS.test_dir + '_Iter%0d' % (current_step)
                 if (not os.path.exists(cur_test_dir)):
                     os.mkdir(cur_test_dir)
-                nnet_model.test(test_data, cur_test_dir)
+                nnet_model.test(test_data, cur_test_dir, True, param_cmvn)
 
                 if (current_step > FLAGS.max_steps):
                     print('Finished max steps.')
@@ -136,6 +140,8 @@ def train():
                     print('nnet accepted')
                 else:
                     print('nnet rejected')
+                
+                pre_vali_loss = vali_loss
 
                 if (current_step <= FLAGS.keep_lr_steps):
                     continue
@@ -143,6 +149,7 @@ def train():
                 if (rel_impr < FLAGS.end_decay_impr):
                     if (current_step <= FLAGS.min_steps):
                         print('We were  supposed to Finish, but continue as min iter %d' % FLAGS.min_steps)
+                        continue
                     else:
                         print('Finished, too small rel. improvement %.6f' % rel_impr)
                     break
@@ -150,8 +157,6 @@ def train():
                 if (rel_impr < FLAGS.start_decay_impr):
                     print('Too small improvement, learning rate decay')
                     nnet_model.decay_learn_rate(FLAGS.lr_decay_factor)
-
-            pre_vali_loss = vali_loss
 
 
 
