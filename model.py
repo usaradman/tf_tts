@@ -31,34 +31,35 @@ class NnetModel(object):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.batch_size = batch_size
+        self.cur_batch_size = 1
         self.learn_rate = learn_rate
         self.momentum = momentum
         self.grad_clip = grad_clip
         self.objective_function = objective_function
 
-         
+
         self.global_step = tf.Variable(0, tf.int32)
         self.seq_length = tf.placeholder(tf.int32, shape=[None])
-        self.train_input = tf.placeholder(tf.float32, shape=[self.batch_size, None, self.input_dim])
-        self.decode_input = tf.placeholder(tf.float32, shape=[1, None, self.input_dim])
+        self.train_input = tf.placeholder(tf.float32, shape=[None, None, self.input_dim])
+        #self.decode_input = tf.placeholder(tf.float32, shape=[self.decode_batch_size, None, self.input_dim])
         self.train_output = tf.placeholder(tf.float32, shape=[None, None, self.output_dim])
-        self.train_output_t = tf.reshape(self.train_output, [-1, self.output_dim])
+        #self.train_output_t = tf.reshape(self.train_output, [-1, self.output_dim])
 
         with tf.variable_scope('NNet_model') as scope:
             self.logits = self._build(self.proto, self.train_input, self.seq_length)
             scope.reuse_variables()
-            self.decode_logits = self._build(self.proto, self.decode_input, self.seq_length)
+            #self.decode_logits = self._build(self.proto, self.train_input, self.seq_length)
 
         if (self.objective_function == 'mse'):
-            self.loss = self._loss(self.train_output_t, self.logits, self.seq_length, self.batch_size)
-            self.decode_loss = self._loss(self.train_output_t, self.decode_logits, self.seq_length, 1)
+            self.loss = self._loss(self.train_output, self.logits, self.seq_length, self.cur_batch_size)
+            #self.decode_loss = self._loss(self.train_output, self.decode_logits, self.seq_length, self.decode_batch_size)
 
         self.optimizer = tf.train.MomentumOptimizer(self.learn_rate, self.momentum)
         grads_vars = self.optimizer.compute_gradients(self.loss)
         if(self.grad_clip > 0):
             grads_vars = tf.contrib.training.clip_gradient_norms(grads_vars, self.grad_clip)
         self.train_op = self.optimizer.apply_gradients(grads_vars, global_step=self.global_step)
-        
+
         self.saver = tf.train.Saver(tf.global_variables())
 
 
@@ -81,11 +82,11 @@ class NnetModel(object):
                     last_output = self._DNN(layer['num_units'], layer['dropout'], layer['activation'], last_output)
             else:
                 continue
-            
+
         with tf.variable_scope('OUTPUT'):
             last_output = self._DNN(self.output_dim, False, '', last_output)
-        dim = tf.cast(last_output.shape[-1], tf.int32)
-        last_output = tf.reshape(last_output, [-1, dim])
+        #dim = tf.cast(last_output.shape[-1], tf.int32)
+        #last_output = tf.reshape(last_output, [-1, dim])
         return last_output
 
 
@@ -95,59 +96,60 @@ class NnetModel(object):
         '''
         if (training):
             next_batch = data_utils.get_batch(dataset, self.batch_size, self.input_dim, self.output_dim)
+            self.cur_batch_size = self.batch_size
         else:
-            next_batch = data_utils.get_batch(dataset, 1, self.input_dim, self.output_dim, shuffle=False)
-
-        #for ele in tf.trainable_variables():
-        #    print(ele.name)
+            self.cur_batch_size = len(dataset)
+            next_batch = data_utils.get_batch(dataset, self.cur_batch_size, self.input_dim, self.output_dim, shuffle=False)
 
         loss = 0
-        ind = 0
-        isdone = False
         while True:
             try:
                 input_data, output_data, seq_length = self.sess.run(next_batch)
-                if (training):
-                    if (input_data.shape[0] != self.batch_size):
-                        continue
-                    ind += 1
-                    #for i in xrange(input_data.shape[0]):
-                    #    numpy.savetxt('rebuild/out_%d_%d_%d.cmp'%(ind, i, seq_length[i]), input_data[i], fmt='%f')
-                    #    numpy.savetxt('rebuild/out_%d_%d_%d.lab'%(ind, i, seq_length[i]), output_data[i], fmt='%f')
+                if (input_data.shape[0] != self.cur_batch_size):
+                    continue
 
+                if (training):
                     pre_loss, _ = self.sess.run([self.loss, self.train_op], feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
                     loss = self.sess.run(self.loss, feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
                     print('bach: %d preloss %.4f loss: %.4f' % (input_data.shape[0], pre_loss, loss))
                 else:
-                    #numpy.savetxt('rebuild/out_%d.cmp'%ind, output_data[0], fmt='%f')
-                    #numpy.savetxt('rebuild/out_%d.lab'%ind, input_data[0], fmt='%f')
-                    loss += self.sess.run(self.decode_loss, feed_dict={self.decode_input:input_data, self.train_output:output_data,
+                    loss = self.sess.run(self.loss, feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
             except tf.errors.OutOfRangeError:
                 #if (not training):
-                #    loss = loss / len(dataset)
+                #    loss = loss / ind
                 break
 
         return loss
 
 
     def test(self, dataset, out_dir, apply_cmvn=False, param_cmvn=None):
-        next_batch = data_utils.get_batch(dataset, 1, self.input_dim, self.output_dim, shuffle=False)
+        self.cur_batch_size = 1
+        next_batch = data_utils.get_batch(dataset, self.cur_batch_size, self.input_dim, self.output_dim, shuffle=False)
         ind = 0
         while True:
             try:
-                input_data, _, seq_length = self.sess.run(next_batch)
-                output = self.sess.run(self.decode_logits, feed_dict={self.decode_input:input_data,
+                input_data, output_data, seq_length = self.sess.run(next_batch)
+                if(input_data.shape[0] != self.cur_batch_size):
+                    continue
+                output, loss = self.sess.run([self.logits, self.loss], feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
+                
+                output_data = output_data[0]
+                output = output[0]
                 output = output[:seq_length[0]]
-
+                output_data = output_data[:seq_length[0]]
                 if(apply_cmvn):
                     output = output * param_cmvn[1] + param_cmvn[0]
+                    output_data = output_data * param_cmvn[1] + param_cmvn[0]
 
                 filename = os.path.basename(dataset[ind]).split('.')[0] + '.cmp'
+                tr_filename = os.path.basename(dataset[ind]).split('.')[0] + '_tr.cmp'
+                print('%.4f %s' % (loss, filename))
                 numpy.savetxt(out_dir + '/' + filename, output, fmt='%f')
+                numpy.savetxt(out_dir + '/' + tr_filename, output_data, fmt='%f')
                 ind += 1
             except tf.errors.OutOfRangeError:
                 break
@@ -157,24 +159,24 @@ class NnetModel(object):
         '''
         compute loss
         '''
-        if (True):
+        if (False):
             loss = 0.0
-            for i in xrange(batch_size):
-                loss += tf.losses.mean_squared_error(output[i * batch_size : i * batch_size + seq_length[i]], 
-                                          logits[i * batch_size : i * batch_size + seq_length[i]])
+            #for i in xrange(batch_size):
+            #    loss += tf.losses.mean_squared_error(output[i * batch_size : i * batch_size + seq_length[i]],
+            #                              logits[i * batch_size : i * batch_size + seq_length[i]])
+            loss = tf.losses.mean_squared_error(output, logits)
             return loss
             #return loss / tf.cast(batch_size, tf.float32)
         else:
-        
+
             diff = tf.Variable(0, dtype=tf.float32)
             num_frames = 0
             for i in xrange(batch_size):
-                diff += 0.5 * tf.reduce_sum(tf.pow(output[i * batch_size : i * batch_size + seq_length[i]]
-                                          - logits[i * batch_size : i * batch_size + seq_length[i]], 2))
+                diff += 0.5 * tf.reduce_sum(tf.squared_difference(output[i, :seq_length[i], :], logits[i, :seq_length[i], :]))
                 num_frames += seq_length[i]
             #diff = diff / batch_size
             #print(batch_size)
-            diff = diff / tf.cast(num_frames,tf.float32) 
+            diff = diff / tf.cast(num_frames,tf.float32)
             return diff
 
 
@@ -183,7 +185,7 @@ class NnetModel(object):
         self.learn_rate *= decay_factor
 
 
-    def _RNN(self, num_units, cell = 'LSTM', dropout = False, activation = '', input = None, seq_length = None):
+    def _RNN(self, num_units, cell = 'LSTM', dropout = 0.0, activation = '', input = None, seq_length = None):
         rnn_cell = None
         if (cell == 'LSTM'):
             rnn_cell = tf.contrib.rnn.BasicLSTMCell(num_units)
@@ -196,8 +198,9 @@ class NnetModel(object):
         return output, state
 
 
-    def _DNN(self, num_units, dropout = False, activation = 'relu', input = None):
+    def _DNN_legacy(self, num_units, dropout = 0.0, activation = 'relu', input = None):
         #size = tf.shape(input)[0]
+        output_shape = input.get_shape().as_list()[:-1] + [num_units]
         size = input.get_shape().as_list()[0]
         input = tf.reshape(input, [-1, tf.cast(input.shape[-1], tf.int32)])
         weights = tf.get_variable('weights', [input.shape[-1], num_units], initializer=tf.truncated_normal_initializer(), dtype=tf.float32)
@@ -210,10 +213,29 @@ class NnetModel(object):
             output = tf.nn.sigmoid(tf.matmul(input, weights) + biases)
         else:
             output = tf.matmul(input, weights) + biases
-        output = tf.reshape(output, [size, -1, num_units])
+        output.set_shape(output_shape)
+        #output = tf.reshape(output, [size, -1, num_units])
         #output = tf.stack(tf.split(output, size, axis=0))
         return output
 
+
+    def _DNN(self, num_units, dropout = False, activation = 'relu', input = None):
+        '''
+        DNN Layer
+        '''
+        _activation = None
+        if (activation == 'relu'):
+            _activation = tf.nn.relu
+        elif (activation == 'tanh'):
+            activation = tf.nn.tanh
+        elif (activation == 'sigmoid'):
+            activation = tf.nn.sigmoid
+        else:
+            activation = tf.nn.relu
+        #input = tf.transpose(input, perm=[1,0,2])
+        output = tf.contrib.layers.fully_connected(input, num_units, activation_fn=_activation)
+        #output = tf.transpose(output, perm=[1,0,2])
+        return output
 
     def _CONV(self, num_units, dropout, input):
         '''

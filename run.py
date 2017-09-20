@@ -19,24 +19,25 @@ import model
 import data_utils
 
 
-tf.app.flags.DEFINE_string("train_dir", "cissy_1900", "Training directory.")
-tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir2", "Cepstral Mean and Variance Normalization directory.")
-tf.app.flags.DEFINE_string("data_dir", "data/tfrecords", "Data directory.")
+tf.app.flags.DEFINE_string("train_dir", "cissy_5000", "Training directory.")
+tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir", "CMVN directory.")
+tf.app.flags.DEFINE_string("data_dir", "data/tfrecords-param", "Data directory.")
 tf.app.flags.DEFINE_string("test_dir", "test", "Test output directory.")
-tf.app.flags.DEFINE_boolean("decode", False, "Is decode otherwise training. default(False)")
-tf.app.flags.DEFINE_boolean("compute_cmvn", False, "compute cmvn of training set")
+tf.app.flags.DEFINE_boolean("decode", False, "Decode or etraining.")
+tf.app.flags.DEFINE_boolean("compute_cmvn", False, "compute cmvn of the training set")
 tf.app.flags.DEFINE_integer("input_dim", 89, "Input dimension.")
 tf.app.flags.DEFINE_integer("output_dim", 51, "Output dimension.")
-tf.app.flags.DEFINE_integer("batch_size", 50, "Batch size.")
+tf.app.flags.DEFINE_integer("batch_size", 30, "Batch size.")
 
 tf.app.flags.DEFINE_string("objective_function", "mse", "Objective function.")
-tf.app.flags.DEFINE_integer("min_steps", 10, "Min training iteration.")
-tf.app.flags.DEFINE_integer("max_steps", 100, "Max training iteration.")
-tf.app.flags.DEFINE_integer("steps_ckpt", 1, "iteration num for save checkpoint.")
-tf.app.flags.DEFINE_integer("keep_lr_steps", 3, "Data directory.")
+tf.app.flags.DEFINE_integer("min_steps", 5, "Min training iteration.")
+tf.app.flags.DEFINE_integer("max_steps", 20, "Max training iteration.")
+tf.app.flags.DEFINE_integer("steps_ckpt", 1, "Save checkpoint every NUM steps.")
+tf.app.flags.DEFINE_integer("keep_lr_steps", 3, "keep learning rate if current step < keep_lr_steps.")
 tf.app.flags.DEFINE_float("learn_rate", 0.0001, "Learning rate.")
-tf.app.flags.DEFINE_float("momentum", 0.8, "Momentum for MomentumOptimizer")
-tf.app.flags.DEFINE_float("grad_clip", 8.0, "Gradients clip max_norm value")
+tf.app.flags.DEFINE_float("drop_out", 0.3, "Dropout.")
+tf.app.flags.DEFINE_float("momentum", 0.9, "Momentum for MomentumOptimizer")
+tf.app.flags.DEFINE_float("grad_clip", 0.0, "Gradients clip max_norm value")
 tf.app.flags.DEFINE_float("lr_decay_factor", 0.75, "Learning rate decay factor.")
 tf.app.flags.DEFINE_float("start_decay_impr", 0.001, "Start decay learning rate when rel_impr < start_decay_impr.")
 tf.app.flags.DEFINE_float("end_decay_impr", 0.0001, "Finish training when rel_impr < end_decay_impr.")
@@ -45,18 +46,14 @@ tf.app.flags.DEFINE_float("end_decay_impr", 0.0001, "Finish training when rel_im
 FLAGS = tf.app.flags.FLAGS
 
 NNET_PROTO = [
-                {'type':'DNN',
-                'num_units':256,
-                'activation':'relu',
-                'dropout':False},
-                {'type':'DNN',
-                'num_units':256,
-                'activation':'relu',
-                'dropout':False},
                 {'type':'LSTM',
                 'num_units':256,
-                'activation':'',
-                'dropout':False}
+                'activation':'relu',
+                'dropout': 0.0},
+                {'type':'LSTM',
+                'num_units':256,
+                'activation':'relu',
+                'dropout': 0.0},
           ]
 
 
@@ -119,7 +116,7 @@ def train():
             rel_impr = (pre_vali_loss - vali_loss) / pre_vali_loss
 
             if (current_step % FLAGS.steps_ckpt == 0):
-                print('Iteration %0d : TRAIN AVG.LOSS %.4f, CROSSVAL AVG.LOSS %.4f, Impr %.4f, Learning Rate %.6f, Cost Time %.2f' % (current_step, train_loss, vali_loss, rel_impr, nnet_model.learn_rate, step_time))
+                print('Iteration %0d : TRAIN AVG.LOSS %.4f, VAL AVG.LOSS %.4f, Impr %.4f, Learning Rate %.6f, Cost Time %.2f' % (current_step, train_loss, vali_loss, rel_impr, nnet_model.learn_rate, step_time))
                 # Save checkpoint
                 nnet_cur = 'model_step_%d.ckpt' % current_step
                 checkpoint_path = os.path.join(FLAGS.train_dir, nnet_best)

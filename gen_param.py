@@ -40,7 +40,8 @@ def decompose(cmp_dir, lf0_dir, mgc_dir, lsp_dim, binary):
 
         lsp.tofile(mgc_file)
         lf0.tofile(lf0_file)
-
+        np.savetxt(mgc_file+'.txt', lsp, fmt='%f')
+        np.savetxt(lf0_file+'.txt', lf0, fmt='%f')
 
 if __name__ == '__main__':
     # cmp_dir lf0_dir mgc_dir cmp_dim binary

@@ -42,7 +42,7 @@ def read_file(filename, dim):
     return numpy.reshape(feature, (len(feature)//dim, dim))
 
 
-def compute_cmvn(data, label_dim, param_dim, out_dir=''):
+def _compute_cmvn(data, label_dim, param_dim, out_dir=''):
     '''
     CMVN
     '''
@@ -56,7 +56,7 @@ def compute_cmvn(data, label_dim, param_dim, out_dir=''):
     num_frames = 0
     for i in xrange(data_size):
         label = read_file(data[i][0], label_dim)
-        param = read_file(data[i][0], param_dim)
+        param = read_file(data[i][1], param_dim)
         cur_frames = label.shape[0]
         num_frames += cur_frames
 
@@ -157,7 +157,7 @@ def create_data(data_dir, cmvn_dir, compute_cmvn, label_dim, param_dim):
     param_cmvn = None
     if (compute_cmvn):
         print('Computing CMVN...')
-        label_cmvn, param_cmvn = compute_cmvn(train_data, label_dim, param_dim, cmvn_dir)
+        label_cmvn, param_cmvn = _compute_cmvn(train_data, label_dim, param_dim, cmvn_dir)
     else:
         label_cmvn, param_cmvn = get_cmvn(cmvn_dir)
     return train_data, vali_data, test_data, label_cmvn, param_cmvn

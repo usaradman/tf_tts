@@ -19,11 +19,11 @@ import model
 import data_utils
 
 
-tf.app.flags.DEFINE_string("train_dir", "cissy_1900", "Training directory.")
-tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir2", "Cepstral Mean and Variance Normalization directory.")
+tf.app.flags.DEFINE_string("cmvn_dir", "cmvn_dir", "Cepstral Mean and Variance Normalization directory.")
 tf.app.flags.DEFINE_string("data_dir", "data/tfrecords", "Data directory.")
 tf.app.flags.DEFINE_string("test_dir", "test", "Test output directory.")
 tf.app.flags.DEFINE_boolean("compute_cmvn", False, "compute cmvn of training set")
+tf.app.flags.DEFINE_boolean("apply_cmvn", True, "apply cmvn of training set")
 tf.app.flags.DEFINE_integer("input_dim", 89, "Input dimension.")
 tf.app.flags.DEFINE_integer("output_dim", 51, "Output dimension.")
 
@@ -56,6 +56,6 @@ if __name__ == '__main__':
         cur_test_dir = FLAGS.test_dir
         if (not os.path.exists(cur_test_dir)):
             os.mkdir(cur_test_dir)
-        test(sess, test_data, cur_test_dir, FLAGS.input_dim ,FLAGS.output_dim, True, param_cmvn)
+        test(sess, test_data, cur_test_dir, FLAGS.input_dim ,FLAGS.output_dim, FLAGS.apply_cmvn, param_cmvn)
 
 
