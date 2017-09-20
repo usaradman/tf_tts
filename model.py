@@ -104,10 +104,9 @@ class NnetModel(object):
         loss = 0
         while True:
             try:
-                input_data, output_data, seq_length = self.sess.run(next_batch)
+                input_data, output_data, seq_length, seq_length2 = self.sess.run(next_batch)
                 if (input_data.shape[0] != self.cur_batch_size):
                     continue
-
                 if (training):
                     pre_loss, _ = self.sess.run([self.loss, self.train_op], feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
@@ -126,21 +125,21 @@ class NnetModel(object):
 
 
     def test(self, dataset, out_dir, apply_cmvn=False, param_cmvn=None):
-        self.cur_batch_size = 1
-        next_batch = data_utils.get_batch(dataset, self.cur_batch_size, self.input_dim, self.output_dim, shuffle=False)
+        self.cur_batch_size = 2 
+        next_batch = data_utils.get_batch(dataset, self.cur_batch_size, self.input_dim, self.output_dim, shuffle=True)
         ind = 0
         while True:
             try:
-                input_data, output_data, seq_length = self.sess.run(next_batch)
+                input_data, output_data, seq_length, _ = self.sess.run(next_batch)
                 if(input_data.shape[0] != self.cur_batch_size):
                     continue
                 output, loss = self.sess.run([self.logits, self.loss], feed_dict={self.train_input:input_data, self.train_output:output_data,
                                                         self.seq_length:seq_length})
                 
-                output_data = output_data[0]
+                output_data = output_data[1]
                 output = output[0]
                 output = output[:seq_length[0]]
-                output_data = output_data[:seq_length[0]]
+                output_data = output_data[:seq_length[1]]
                 if(apply_cmvn):
                     output = output * param_cmvn[1] + param_cmvn[0]
                     output_data = output_data * param_cmvn[1] + param_cmvn[0]
@@ -198,7 +197,7 @@ class NnetModel(object):
         return output, state
 
 
-    def _DNN_legacy(self, num_units, dropout = 0.0, activation = 'relu', input = None):
+    def _DNN_2(self, num_units, dropout = 0.0, activation = 'relu', input = None):
         #size = tf.shape(input)[0]
         output_shape = input.get_shape().as_list()[:-1] + [num_units]
         size = input.get_shape().as_list()[0]

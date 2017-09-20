@@ -21,7 +21,8 @@ def parse_function(data, input_dim, output_dim):
     input = parsed_features["label"]
     output = parsed_features["param"]
     row = tf.shape(input)[0]
-    return input, output, row
+    row2 = tf.shape(input)[0]
+    return input, output, row, row2
 
 
 
@@ -31,7 +32,7 @@ def get_batch(data_list, batch_size, input_dim, output_dim, shuffle=True, repeat
         dataset = dataset.repeat(repeat)
         if (shuffle):
             dataset = dataset.shuffle(buffer_size=len(data_list) - 10)
-        dataset = dataset.padded_batch(batch_size, padded_shapes=([None, input_dim], [None, output_dim], []))
+        dataset = dataset.padded_batch(batch_size, padded_shapes=([None, input_dim], [None, output_dim], [], []))
         iterator = dataset.make_one_shot_iterator()
         return iterator.get_next()
 
